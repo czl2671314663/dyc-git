@@ -1,0 +1,22 @@
+{
+  "name": "zl-income",
+  "version": "1.0.0",
+  "description": "熙软科室收入看板",
+  "scripts": {
+    "server": "node server.js",
+    "client": "cd client && npm run dev",
+    "dev": "concurrently \"npm run server\" \"npm run client\"",
+    "build": "cd client && npm run build"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "better-sqlite3": "^11.0.0",
+    "cors": "^2.8.6",
+    "express": "^5.2.1"
+  },
+  "devDependencies": {
+    "concurrently": "^10.0.3"
+  }
+}

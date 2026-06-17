@@ -1,0 +1,510 @@
+const express = require('express');
+const cors = require('cors');
+const { query } = require('./db');
+
+const app = express();
+app.use(cors());
+app.use(express.json());
+
+// ====== 工具函数 ======
+
+/** 构建 WHERE 条件，传入 { BIZ_YEAR?, BIZ_QUARTER?, BIZ_MONTH?, DEPT_CODE?, CATGROY? } */
+function buildWhere(filters) {
+  let clause = '';
+  const params = [];
+  const fields = [
+    ['BIZ_YEAR', filters.BIZ_YEAR],
+    ['BIZ_QUARTER', filters.BIZ_QUARTER],
+    ['BIZ_MONTH', filters.BIZ_MONTH],
+    ['DEPT_CODE', filters.DEPT_CODE],
+    ['CATGROY', filters.CATGROY],
+  ];
+  for (const [name, val] of fields) {
+    if (val !== undefined && val !== null && val !== '') {
+      clause += ` AND ${name} = ?`;
+      params.push(val);
+    }
+  }
+  return { clause, params };
+}
+
+// ==================== 收入看板 ====================
+
+/** KPI 汇总卡片（含同比） */
+app.get('/api/income/summary', async (req, res) => {
+  try {
+    const { year, quarter, month, dept_code, catgroy } = req.query;
+    const { clause, params } = buildWhere({ BIZ_YEAR: year, BIZ_QUARTER: quarter, BIZ_MONTH: month, DEPT_CODE: dept_code, CATGROY: catgroy });
+    const baseWhere = "WHERE TIME_TYPE='1' AND DEPT_TYPE='1'" + clause;
+
+    const [rows] = query(`
+      SELECT
+        COALESCE(SUM(INCOME_DEPT), 0)       AS total_income,
+        COALESCE(SUM(INCOME_VALID), 0)      AS valid_income,
+        COALESCE(SUM(INCOME_DRUG), 0)       AS drug_income,
+        COALESCE(SUM(INCOME_MATERIAL), 0)   AS material_income,
+        COALESCE(SUM(INCOME_EXAM_TEST), 0)  AS exam_test_income,
+        COALESCE(SUM(INCOME_SERVICE), 0)    AS service_income,
+        COALESCE(SUM(INCOME_REG), 0)        AS reg_income,
+        COALESCE(SUM(INCOME_OTHER), 0)      AS other_income,
+        COALESCE(SUM(INCOME_BED), 0)        AS bed_income,
+        COALESCE(SUM(INCOME_NURSE), 0)      AS nurse_income,
+        COALESCE(SUM(NUM_DEPT), 0)          AS visit_count,
+        COALESCE(SUM(NUM_OPS), 0)           AS ops_count,
+        COALESCE(SUM(CASE WHEN OUTP_IN_TYPE='10' THEN INCOME_DEPT ELSE 0 END), 0) AS outpatient_income,
+        COALESCE(SUM(CASE WHEN OUTP_IN_TYPE='20' THEN INCOME_DEPT ELSE 0 END), 0) AS emergency_income,
+        COALESCE(SUM(CASE WHEN OUTP_IN_TYPE='40' THEN INCOME_DEPT ELSE 0 END), 0) AS inpatient_income
+      FROM ads_dept_income ${baseWhere}
+    `, params);
+
+    const data = rows[0];
+
+    // 同比
+    let previous = null;
+    if (year) {
+      const prevYear = String(parseInt(year) - 1);
+      const prev = buildWhere({ BIZ_YEAR: prevYear, BIZ_QUARTER: quarter, BIZ_MONTH: month, DEPT_CODE: dept_code, CATGROY: catgroy });
+      const prevWhere = "WHERE TIME_TYPE='1' AND DEPT_TYPE='1'" + prev.clause;
+      const [prevRows] = query(`
+        SELECT COALESCE(SUM(INCOME_DEPT), 0) AS total_income,
+          COALESCE(SUM(NUM_DEPT), 0) AS visit_count
+        FROM ads_dept_income ${prevWhere}
+      `, prev.params);
+      previous = prevRows[0];
+    }
+
+    res.json({ success: true, data, previous });
+  } catch (err) {
+    console.error('income/summary:', err);
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+/** 月度收入趋势（含同比） */
+app.get('/api/income/trend', async (req, res) => {
+  try {
+    const { year, dept_code, catgroy } = req.query;
+    const incomeField = req.query.field || 'INCOME_DEPT'; // 支持切换收入类别
+
+    if (!year) {
+      const { clause, params } = buildWhere({ DEPT_CODE: dept_code, CATGROY: catgroy });
+      const [rows] = query(`
+        SELECT BIZ_YEAR, BIZ_MONTH, COALESCE(SUM(${incomeField}), 0) AS income
+        FROM ads_dept_income
+        WHERE TIME_TYPE='1' AND DEPT_TYPE='1'${clause}
+        GROUP BY BIZ_YEAR, BIZ_MONTH
+        ORDER BY BIZ_YEAR, BIZ_MONTH
+      `, params);
+      return res.json({ success: true, data: rows });
+    }
+
+    const prevYear = String(parseInt(year) - 1);
+
+    const cur = buildWhere({ BIZ_YEAR: year, DEPT_CODE: dept_code, CATGROY: catgroy });
+    const [curRows] = query(`
+      SELECT BIZ_MONTH, COALESCE(SUM(${incomeField}), 0) AS income
+      FROM ads_dept_income WHERE TIME_TYPE='1' AND DEPT_TYPE='1'${cur.clause}
+      GROUP BY BIZ_MONTH ORDER BY BIZ_MONTH
+    `, cur.params);
+
+    const prev = buildWhere({ BIZ_YEAR: prevYear, DEPT_CODE: dept_code, CATGROY: catgroy });
+    const [prevRows] = query(`
+      SELECT BIZ_MONTH, COALESCE(SUM(${incomeField}), 0) AS income
+      FROM ads_dept_income WHERE TIME_TYPE='1' AND DEPT_TYPE='1'${prev.clause}
+      GROUP BY BIZ_MONTH ORDER BY BIZ_MONTH
+    `, prev.params);
+
+    const prevMap = {};
+    prevRows.forEach(r => { prevMap[r.BIZ_MONTH] = Number(r.income); });
+
+    const merged = curRows.map(r => {
+      const curVal = Number(r.income);
+      const prevVal = prevMap[r.BIZ_MONTH] || 0;
+      return {
+        month: r.BIZ_MONTH,
+        current: curVal,
+        previous: prevVal,
+        yoy: prevVal > 0 ? Number((((curVal - prevVal) / prevVal) * 100).toFixed(2)) : null,
+      };
+    });
+
+    res.json({ success: true, data: merged });
+  } catch (err) {
+    console.error('income/trend:', err);
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+/** 收入构成（饼图） */
+app.get('/api/income/composition', async (req, res) => {
+  try {
+    const { year, quarter, month, dept_code, catgroy } = req.query;
+    const { clause, params } = buildWhere({ BIZ_YEAR: year, BIZ_QUARTER: quarter, BIZ_MONTH: month, DEPT_CODE: dept_code, CATGROY: catgroy });
+    const where = "WHERE TIME_TYPE='1' AND DEPT_TYPE='1'" + clause;
+
+    const cats = [
+      ['药品收入', 'INCOME_DRUG'],
+      ['检查检验收入', 'INCOME_EXAM_TEST'],
+      ['材料收入', 'INCOME_MATERIAL'],
+      ['服务收入', 'INCOME_SERVICE'],
+      ['挂号收入', 'INCOME_REG'],
+      ['床位收入', 'INCOME_BED'],
+      ['护理收入', 'INCOME_NURSE'],
+      ['其他收入', 'INCOME_OTHER'],
+    ];
+
+    const unions = cats.map(([label, field]) =>
+      `SELECT '${label}' AS category, COALESCE(SUM(${field}), 0) AS amount FROM ads_dept_income ${where}`
+    ).join(' UNION ALL ');
+
+    const [rows] = query(unions, Array(cats.length).fill(params).flat());
+    const [totalRows] = query(`SELECT COALESCE(SUM(INCOME_DEPT),0) AS total FROM ads_dept_income ${where}`, params);
+
+    res.json({ success: true, data: rows.filter(r => Number(r.amount) > 0), total: totalRows[0].total });
+  } catch (err) {
+    console.error('income/composition:', err);
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+/** 门诊/急诊/住院 环形图 */
+app.get('/api/income/oei', async (req, res) => {
+  try {
+    const { year, quarter, month, dept_code } = req.query;
+    const { clause, params } = buildWhere({ BIZ_YEAR: year, BIZ_QUARTER: quarter, BIZ_MONTH: month, DEPT_CODE: dept_code });
+    const where = "WHERE TIME_TYPE='1' AND DEPT_TYPE='1'" + clause;
+
+    const [rows] = query(`
+      SELECT CASE WHEN OUTP_IN_TYPE='10' THEN '门诊'
+                  WHEN OUTP_IN_TYPE='20' THEN '急诊'
+                  WHEN OUTP_IN_TYPE='40' THEN '住院' ELSE '其他' END AS type,
+             COALESCE(SUM(INCOME_DEPT), 0) AS total_income,
+             COALESCE(SUM(NUM_DEPT), 0) AS visit_count
+      FROM ads_dept_income ${where}
+      GROUP BY OUTP_IN_TYPE ORDER BY total_income DESC
+    `, params);
+
+    res.json({ success: true, data: rows });
+  } catch (err) {
+    console.error('income/oei:', err);
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+/** 科室收入排名 */
+app.get('/api/income/dept-ranking', async (req, res) => {
+  try {
+    const { year, quarter, month, dept_code, catgroy, limit = 20 } = req.query;
+    const { clause, params } = buildWhere({ BIZ_YEAR: year, BIZ_QUARTER: quarter, BIZ_MONTH: month, DEPT_CODE: dept_code, CATGROY: catgroy });
+    params.push(parseInt(limit));
+
+    const [rows] = query(`
+      SELECT DEPT_CODE, DEPT_NAME,
+        COALESCE(SUM(INCOME_DEPT), 0)    AS total_income,
+        COALESCE(SUM(INCOME_VALID), 0)   AS valid_income,
+        COALESCE(SUM(INCOME_DRUG), 0)    AS drug_income,
+        COALESCE(SUM(INCOME_MATERIAL), 0) AS material_income,
+        COALESCE(SUM(INCOME_EXAM_TEST), 0) AS exam_test_income,
+        COALESCE(SUM(INCOME_SERVICE), 0) AS service_income,
+        COALESCE(SUM(NUM_DEPT), 0)       AS visit_count,
+        COALESCE(SUM(NUM_OPS), 0)        AS ops_count
+      FROM ads_dept_income
+      WHERE TIME_TYPE='1' AND DEPT_TYPE='1'${clause}
+      GROUP BY DEPT_CODE, DEPT_NAME
+      ORDER BY total_income DESC LIMIT ?
+    `, params);
+
+    res.json({ success: true, data: rows });
+  } catch (err) {
+    console.error('income/dept-ranking:', err);
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+/** 科室收入明细（分页） */
+app.get('/api/income/dept-detail', async (req, res) => {
+  try {
+    const { year, quarter, month, dept_code, catgroy, page = 1, pageSize = 20 } = req.query;
+    const offset = (parseInt(page) - 1) * parseInt(pageSize);
+    const { clause, params } = buildWhere({ BIZ_YEAR: year, BIZ_QUARTER: quarter, BIZ_MONTH: month, DEPT_CODE: dept_code, CATGROY: catgroy });
+    const where = "WHERE TIME_TYPE='1' AND DEPT_TYPE='1'" + clause;
+
+    const [cnt] = query(`SELECT COUNT(DISTINCT DEPT_CODE) AS total FROM ads_dept_income ${where}`, params);
+    params.push(parseInt(pageSize), offset);
+    const [rows] = query(`
+      SELECT DEPT_CODE, DEPT_NAME,
+        COALESCE(SUM(INCOME_DEPT),0)    AS total_income,
+        COALESCE(SUM(INCOME_VALID),0)   AS valid_income,
+        COALESCE(SUM(INCOME_DRUG),0)    AS drug_income,
+        COALESCE(SUM(INCOME_MATERIAL),0) AS material_income,
+        COALESCE(SUM(INCOME_EXAM_TEST),0) AS exam_test_income,
+        COALESCE(SUM(INCOME_SERVICE),0) AS service_income,
+        COALESCE(SUM(INCOME_REG),0)     AS reg_income,
+        COALESCE(SUM(INCOME_OTHER),0)   AS other_income,
+        COALESCE(SUM(INCOME_BED),0)     AS bed_income,
+        COALESCE(SUM(INCOME_NURSE),0)   AS nurse_income,
+        COALESCE(SUM(NUM_DEPT),0)       AS visit_count,
+        COALESCE(SUM(NUM_OPS),0)        AS ops_count
+      FROM ads_dept_income ${where}
+      GROUP BY DEPT_CODE, DEPT_NAME
+      ORDER BY total_income DESC LIMIT ? OFFSET ?
+    `, params);
+
+    res.json({ success: true, data: { rows, total: cnt[0].total, page: parseInt(page), pageSize: parseInt(pageSize) } });
+  } catch (err) {
+    console.error('income/dept-detail:', err);
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// ==================== 人次看板（全部从 ads_dept_income 取数） ====================
+
+// 人次 WHERE：TIME_TYPE='1' AND DEPT_TYPE='1'，catgroy 默认不过滤（全部门诊+住院）
+function buildVisitWhere(query) {
+  const { year, quarter, month, dept_code, catgroy } = query || {};
+  let clause = "WHERE TIME_TYPE='1' AND DEPT_TYPE='1'";
+  const params = [];
+  if (year) { clause += ' AND BIZ_YEAR = ?'; params.push(year); }
+  if (quarter) { clause += ' AND BIZ_QUARTER = ?'; params.push(quarter); }
+  if (month) { clause += ' AND BIZ_MONTH = ?'; params.push(month); }
+  if (dept_code) { clause += ' AND DEPT_CODE = ?'; params.push(dept_code); }
+  if (catgroy) { clause += ' AND CATGROY = ?'; params.push(catgroy); }
+  return { clause, params };
+}
+
+/** 人次 KPI 汇总 */
+app.get('/api/visit/summary', async (req, res) => {
+  try {
+    const { clause, params } = buildVisitWhere(req.query);
+    const [rows] = query(`
+      SELECT COALESCE(SUM(NUM_DEPT), 0) AS total,
+        COALESCE(SUM(CASE WHEN OUTP_IN_TYPE='10' THEN NUM_DEPT ELSE 0 END), 0) AS outpatient,
+        COALESCE(SUM(CASE WHEN OUTP_IN_TYPE='20' THEN NUM_DEPT ELSE 0 END), 0) AS emergency,
+        COALESCE(SUM(CASE WHEN OUTP_IN_TYPE='40' THEN NUM_DEPT ELSE 0 END), 0) AS inpatient,
+        COALESCE(SUM(NUM_OPS), 0) AS ops
+      FROM ads_dept_income ${clause}
+    `, params);
+    const data = rows[0];
+
+    // 同比
+    let prev = null;
+    if (req.query.year) {
+      const py = String(parseInt(req.query.year) - 1);
+      const pv = buildVisitWhere({ ...req.query, year: py });
+      const [pr] = query(`SELECT COALESCE(SUM(NUM_DEPT),0) AS total FROM ads_dept_income ${pv.clause}`, pv.params);
+      prev = { total: pr[0].total };
+    }
+    res.json({ success: true, data, previous: prev });
+  } catch (err) {
+    console.error('visit/summary:', err);
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+/** 人次月度趋势 */
+app.get('/api/visit/trend', async (req, res) => {
+  try {
+    const { year, dept_code } = req.query;
+    const { clause, params } = buildVisitWhere({ DEPT_CODE: dept_code });
+
+    if (!year) {
+      const [rows] = query(`
+        SELECT BIZ_YEAR, BIZ_MONTH, COALESCE(SUM(NUM_DEPT),0) AS visits
+        FROM ads_dept_income ${clause}
+        GROUP BY BIZ_YEAR, BIZ_MONTH ORDER BY BIZ_YEAR, BIZ_MONTH
+      `, params);
+      return res.json({ success: true, data: rows });
+    }
+
+    const prevYear = String(parseInt(year) - 1);
+    const [cr] = query(`SELECT BIZ_MONTH, COALESCE(SUM(NUM_DEPT),0) AS visits FROM ads_dept_income ${clause} AND BIZ_YEAR=? GROUP BY BIZ_MONTH ORDER BY BIZ_MONTH`, [...params, year]);
+    const [pr] = query(`SELECT BIZ_MONTH, COALESCE(SUM(NUM_DEPT),0) AS visits FROM ads_dept_income ${clause} AND BIZ_YEAR=? GROUP BY BIZ_MONTH ORDER BY BIZ_MONTH`, [...params, prevYear]);
+
+    const pm = {}; pr.forEach(r => { pm[r.BIZ_MONTH] = Number(r.visits); });
+    const merged = cr.map(r => {
+      const cv = Number(r.visits), pv = pm[r.BIZ_MONTH] || 0;
+      return { month: r.BIZ_MONTH, current: cv, previous: pv, yoy: pv > 0 ? Number((((cv - pv) / pv) * 100).toFixed(2)) : null };
+    });
+    res.json({ success: true, data: merged });
+  } catch (err) {
+    console.error('visit/trend:', err);
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+/** 门诊/急诊/住院 分布 */
+app.get('/api/visit/oei', async (req, res) => {
+  try {
+    const { clause, params } = buildVisitWhere(req.query);
+    const [rows] = query(`
+      SELECT CASE WHEN OUTP_IN_TYPE='10' THEN '门诊'
+                  WHEN OUTP_IN_TYPE='20' THEN '急诊'
+                  WHEN OUTP_IN_TYPE='40' THEN '住院' ELSE '其他' END AS type,
+             COALESCE(SUM(NUM_DEPT), 0) AS visits
+      FROM ads_dept_income ${clause}
+      GROUP BY OUTP_IN_TYPE ORDER BY visits DESC
+    `, params);
+    res.json({ success: true, data: rows });
+  } catch (err) {
+    console.error('visit/oei:', err);
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+/** 科室人次排名 */
+app.get('/api/visit/dept-ranking', async (req, res) => {
+  try {
+    const { limit = 15 } = req.query;
+    const { clause, params } = buildVisitWhere(req.query);
+    params.push(parseInt(limit));
+
+    const [rows] = query(`
+      SELECT DEPT_CODE, DEPT_NAME, COALESCE(SUM(NUM_DEPT),0) AS total_visits
+      FROM ads_dept_income ${clause}
+      GROUP BY DEPT_CODE, DEPT_NAME ORDER BY total_visits DESC LIMIT ?
+    `, params);
+    res.json({ success: true, data: rows });
+  } catch (err) {
+    console.error('visit/dept-ranking:', err);
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+/** 科室人次明细（分页） */
+app.get('/api/visit/dept-detail', async (req, res) => {
+  try {
+    const { page = 1, pageSize = 20 } = req.query;
+    const offset = (parseInt(page) - 1) * parseInt(pageSize);
+    const { clause, params } = buildVisitWhere(req.query);
+    const countParams = [...params];
+
+    const [cnt] = query(`SELECT COUNT(DISTINCT DEPT_CODE) AS total FROM ads_dept_income ${clause}`, countParams);
+
+    const listParams = [...params, parseInt(pageSize), offset];
+    const [rows] = query(`
+      SELECT DEPT_CODE, DEPT_NAME,
+        COALESCE(SUM(NUM_DEPT), 0) AS total_visits,
+        COALESCE(SUM(CASE WHEN OUTP_IN_TYPE='10' THEN NUM_DEPT ELSE 0 END), 0) AS outpatient,
+        COALESCE(SUM(CASE WHEN OUTP_IN_TYPE='20' THEN NUM_DEPT ELSE 0 END), 0) AS emergency,
+        COALESCE(SUM(NUM_OPS), 0) AS ops
+      FROM ads_dept_income ${clause}
+      GROUP BY DEPT_CODE, DEPT_NAME
+      ORDER BY total_visits DESC LIMIT ? OFFSET ?
+    `, listParams);
+
+    res.json({ success: true, data: { rows, total: cnt[0].total, page: parseInt(page), pageSize: parseInt(pageSize) } });
+  } catch (err) {
+    console.error('visit/dept-detail:', err);
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+/** 住院天数分布（来自 ads_dept_income_zy_dim） */
+app.get('/api/visit/zy-stay', async (req, res) => {
+  try {
+    const { year, quarter, month, dept_code } = req.query;
+    const { clause, params } = buildWhere({ BIZ_YEAR: year, BIZ_QUARTER: quarter, BIZ_MONTH: month, DEPT_CODE: dept_code });
+    const [rows] = query(`
+      SELECT CASE WHEN CAST(DIM_VALUE AS INTEGER) < 7 THEN '小于7天'
+                  WHEN CAST(DIM_VALUE AS INTEGER) >= 7 AND CAST(DIM_VALUE AS INTEGER) < 15 THEN '7-15天'
+                  WHEN CAST(DIM_VALUE AS INTEGER) >= 15 AND CAST(DIM_VALUE AS INTEGER) < 30 THEN '15-30天'
+                  WHEN CAST(DIM_VALUE AS INTEGER) >= 30 THEN '大于30天' ELSE '其他' END AS name,
+             SUM(NUM_DEPT) AS visits
+      FROM ads_dept_income_zy_dim WHERE DIM_TYPE='住院天数'${clause}
+      GROUP BY name ORDER BY MIN(CAST(DIM_VALUE AS INTEGER))
+    `, params);
+    res.json({ success: true, data: rows });
+  } catch (err) {
+    console.error('visit/zy-stay:', err);
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+/** 手术等级分布（来自 ads_inx_operation） */
+app.get('/api/visit/ops-level', async (req, res) => {
+  try {
+    const { year, quarter, month, dept_code } = req.query;
+    const params = [];
+    let clause = '';
+    if (year) { clause += ' AND BIZ_YEAR = ?'; params.push(year); }
+    if (quarter) { clause += ' AND BIZ_QUARTER = ?'; params.push(quarter); }
+    if (month) { clause += ' AND BIZ_MONTH = ?'; params.push(month); }
+    if (dept_code) { clause += ' AND DEPT_ID = ?'; params.push(dept_code); }
+
+    const [rows] = query(`
+      SELECT CASE OPERATION_LEVEL WHEN '1' THEN '一级手术' WHEN '2' THEN '二级手术'
+             WHEN '3' THEN '三级手术' WHEN '4' THEN '四级手术' ELSE '其他' END AS name,
+             ROUND(SUM(NUM_OPST), 0) AS visits
+      FROM ads_inx_operation WHERE OPERATION_LEVEL IS NOT NULL${clause}
+      GROUP BY OPERATION_LEVEL ORDER BY CAST(OPERATION_LEVEL AS INTEGER)
+    `, params);
+    res.json({ success: true, data: rows });
+  } catch (err) {
+    console.error('visit/ops-level:', err);
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// ==================== 共享接口 ====================
+
+/** 筛选器选项 */
+app.get('/api/filter-options', async (req, res) => {
+  try {
+    const [years] = query(`SELECT DISTINCT BIZ_YEAR FROM ads_dept_income WHERE TIME_TYPE='1' AND DEPT_TYPE='1' ORDER BY BIZ_YEAR DESC`);
+    const [depts] = query(`SELECT DISTINCT DEPT_CODE, DEPT_NAME FROM ads_dept_income WHERE TIME_TYPE='1' AND DEPT_TYPE='1' ORDER BY DEPT_NAME`);
+
+    res.json({
+      success: true,
+      data: {
+        years: years.map(r => r.BIZ_YEAR),
+        departments: depts.map(r => ({ code: r.DEPT_CODE, name: r.DEPT_NAME })),
+        catgroys: [{ code: 'MZ', name: '门诊' }, { code: 'ZY', name: '住院' }],
+        quarters: ['1', '2', '3', '4'],
+        months: Array.from({ length: 12 }, (_, i) => String(i + 1).padStart(2, '0')),
+      },
+    });
+  } catch (err) {
+    console.error('filter-options:', err);
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+/** 最新数据日期 */
+app.get('/api/latest-date', async (req, res) => {
+  try {
+    const [rows] = query(`
+      SELECT BIZ_YEAR, BIZ_QUARTER, BIZ_MONTH FROM ads_dept_income_mjz_dim
+      WHERE DIM_CODE='门急诊' AND NUM_DEPT > 0
+      ORDER BY BIZ_YEAR DESC, BIZ_MONTH DESC LIMIT 1
+    `);
+    if (rows.length) {
+      res.json({ success: true, data: { year: rows[0].BIZ_YEAR, quarter: rows[0].BIZ_QUARTER, month: rows[0].BIZ_MONTH } });
+    } else {
+      const [r2] = query(`SELECT BIZ_YEAR, BIZ_QUARTER, BIZ_MONTH FROM ads_dept_income WHERE TIME_TYPE='1' AND DEPT_TYPE='1' ORDER BY BIZ_YEAR DESC, BIZ_MONTH DESC LIMIT 1`);
+      res.json({ success: true, data: r2.length ? { year: r2[0].BIZ_YEAR, quarter: r2[0].BIZ_QUARTER, month: r2[0].BIZ_MONTH } : null });
+    }
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+/** 科室列表（扁平，供下拉框） */
+app.get('/api/dept-list', async (req, res) => {
+  try {
+    const [rows] = query(`
+      SELECT DISTINCT DEPT_CODE, DEPT_NAME
+      FROM ads_dept_income WHERE TIME_TYPE='1' AND DEPT_TYPE='1'
+      ORDER BY DEPT_NAME
+    `);
+    res.json({ success: true, data: rows });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// ====== 启动 ======
+const PORT = process.env.PORT || 3001;
+app.listen(PORT, () => {
+  console.log(`✅ 收入/人次看板 API 已启动: http://localhost:${PORT}`);
+  console.log(`   数据源: xi_ads_monthly.db`);
+});
