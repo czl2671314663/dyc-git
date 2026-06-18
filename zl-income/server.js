@@ -280,12 +280,7 @@ app.get('/api/visit/summary', async (req, res) => {
       SELECT COALESCE(SUM(NUM_DEPT), 0) AS total,
         COALESCE(SUM(CASE WHEN OUTP_IN_TYPE='10' THEN NUM_DEPT ELSE 0 END), 0) AS outpatient,
         COALESCE(SUM(CASE WHEN OUTP_IN_TYPE='20' THEN NUM_DEPT ELSE 0 END), 0) AS emergency,
-        COALESCE(SUM(CASE WHEN OUTP_IN_TYPE='40' THEN NUM_DEPT ELSE 0 END), 0) AS inpatient,
-        COALESCE(SUM(INCOME_DEPT), 0) AS total_income,
-        COALESCE(SUM(CASE WHEN OUTP_IN_TYPE='10' THEN INCOME_DEPT ELSE 0 END), 0) AS outpatient_income,
-        COALESCE(SUM(CASE WHEN OUTP_IN_TYPE='40' THEN INCOME_DEPT ELSE 0 END), 0) AS inpatient_income,
-        COALESCE(SUM(INCOME_DRUG), 0) AS drug_income,
-        COALESCE(SUM(INCOME_VALID), 0) AS valid_income
+        COALESCE(SUM(CASE WHEN OUTP_IN_TYPE='40' THEN NUM_DEPT ELSE 0 END), 0) AS inpatient
       FROM ads_dept_income ${clause}
     `, params);
     const data = rows[0];
@@ -300,6 +295,23 @@ app.get('/api/visit/summary', async (req, res) => {
     const [opsRows] = query(`SELECT COALESCE(SUM(NUM_OPST), 0) AS ops FROM ads_inx_operation ${opsWhere}`, opsParams);
     data.ops = opsRows[0].ops;
 
+    // 住院人次明细指标 (ads_inpatient_work_detail)
+    let ipWhere = 'WHERE 1=1';
+    const ipParams = [];
+    if (req.query.year) { ipWhere += ' AND BIZ_YEAR = ?'; ipParams.push(req.query.year); }
+    if (req.query.quarter) { ipWhere += ' AND BIZ_QUARTER = ?'; ipParams.push(req.query.quarter); }
+    if (req.query.month) { ipWhere += ' AND BIZ_MONTH = ?'; ipParams.push(req.query.month); }
+    if (req.query.dept_code) { ipWhere += ' AND DEPT_CODE = ?'; ipParams.push(req.query.dept_code); }
+
+    const [ipRows] = query(`SELECT
+      COUNT(DISTINCT FPRN) AS discharges,
+      COALESCE(ROUND(AVG(FDAYS), 1), 0) AS avg_stay_days,
+      COALESCE(SUM(CASE WHEN FZYSSLV IN ('3','4') THEN 1 ELSE 0 END), 0) AS level34_ops,
+      COALESCE(SUM(CASE WHEN EVENT_WEEK IN ('周六','周日') THEN 1 ELSE 0 END), 0) AS weekend_inpatient,
+      COALESCE(SUM(CASE WHEN FRYTJ='2' THEN 1 ELSE 0 END), 0) AS em_admission
+    FROM ads_inpatient_work_detail ${ipWhere}`, ipParams);
+    Object.assign(data, ipRows[0]);
+
     // 同比
     let prev = null;
     if (req.query.year) {
@@ -307,7 +319,14 @@ app.get('/api/visit/summary', async (req, res) => {
       const pv = buildVisitWhere({ ...req.query, year: py });
       const [pr] = query(`SELECT COALESCE(SUM(NUM_DEPT),0) AS total FROM ads_dept_income ${pv.clause}`, pv.params);
       const [prevOps] = query(`SELECT COALESCE(SUM(NUM_OPST),0) AS ops FROM ads_inx_operation WHERE BIZ_YEAR=?`, [py]);
-      prev = { total: pr[0].total, ops: prevOps[0].ops };
+      const [prevIp] = query(`SELECT
+        COUNT(DISTINCT FPRN) AS discharges,
+        COALESCE(ROUND(AVG(FDAYS),1), 0) AS avg_stay_days,
+        COALESCE(SUM(CASE WHEN FZYSSLV IN ('3','4') THEN 1 ELSE 0 END), 0) AS level34_ops,
+        COALESCE(SUM(CASE WHEN EVENT_WEEK IN ('周六','周日') THEN 1 ELSE 0 END), 0) AS weekend_inpatient,
+        COALESCE(SUM(CASE WHEN FRYTJ='2' THEN 1 ELSE 0 END), 0) AS em_admission
+      FROM ads_inpatient_work_detail WHERE BIZ_YEAR=?`, [py]);
+      prev = { total: pr[0].total, ops: prevOps[0].ops, ...prevIp[0] };
     }
     res.json({ success: true, data, previous: prev });
   } catch (err) {
