@@ -102,13 +102,20 @@ function IncomeTrendChart({ filters, category }) {
   if (loading) return <Spin style={{ width: '100%', textAlign: 'center', padding: 30 }} />;
   if (!data.length) return <Empty description="暂无数据" />;
 
-  // 区分所有年份 vs 单年+同比
-  const hasYoy = data.length > 0 && data[0].yoy !== undefined;
+  // 只展示到筛选月份
+  let filteredData = data;
+  if (filters.year && filters.month) {
+    filteredData = data.filter(r => parseInt(r.month || r.BIZ_MONTH || '13') <= parseInt(filters.month));
+    if (!filteredData.length) return <Empty description="暂无该月份数据" />;
+  }
 
-  const months = data.map(r => `${r.month || r.BIZ_MONTH}月`);
-  const currentData = data.map(r => (r.current || r.income || 0) / 10000);
-  const previousData = hasYoy ? data.map(r => (r.previous || 0) / 10000) : [];
-  const yoyData = hasYoy ? data.map(r => r.yoy) : [];
+  // 区分所有年份 vs 单年+同比
+  const hasYoy = filteredData.length > 0 && filteredData[0].yoy !== undefined;
+
+  const months = filteredData.map(r => `${r.month || r.BIZ_MONTH}月`);
+  const currentData = filteredData.map(r => (r.current || r.income || 0) / 10000);
+  const previousData = hasYoy ? filteredData.map(r => (r.previous || 0) / 10000) : [];
+  const yoyData = hasYoy ? filteredData.map(r => r.yoy) : [];
 
   const option = {
     tooltip: {
@@ -274,12 +281,19 @@ function YoYGrowthChart({ filters }) {
   if (loading) return <Spin style={{ width: '100%', textAlign: 'center', padding: 30 }} />;
   if (!data.length) return <Empty description="暂无数据" />;
 
+  // 只展示到筛选月份
+  let filteredData = data;
+  if (filters.year && filters.month) {
+    filteredData = data.filter(r => parseInt(r.month || r.BIZ_MONTH || '13') <= parseInt(filters.month));
+    if (!filteredData.length) return <Empty description="暂无该月份数据" />;
+  }
+
   // 仅在有同比数据时展示
-  const hasYoy = data.length > 0 && data[0].yoy !== undefined;
+  const hasYoy = filteredData.length > 0 && filteredData[0].yoy !== undefined;
   if (!hasYoy) return <Empty description="请选择具体年份查看同比增长率" />;
 
-  const months = data.map(r => `${r.month}月`);
-  const yoyValues = data.map(r => r.yoy);
+  const months = filteredData.map(r => `${r.month}月`);
+  const yoyValues = filteredData.map(r => r.yoy);
 
   const option = {
     tooltip: {

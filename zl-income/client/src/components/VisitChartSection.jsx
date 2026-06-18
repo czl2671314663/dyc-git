@@ -88,11 +88,18 @@ function VisitTrendChart({ filters }) {
   if (loading) return <Spin style={{ width: '100%', textAlign: 'center', padding: 30 }} />;
   if (!data.length) return <Empty description="暂无数据" />;
 
-  const months = data.map((r) => `${r.month || r.BIZ_MONTH || ''}月`);
-  const cur = data.map((r) => Number(r.current || r.visits || 0));
-  const prev = data.map((r) => Number(r.previous || 0));
-  const yoyVals = data.map((r) => (r.yoy != null ? r.yoy : null));
-  const hasCompare = data[0] && data[0].previous !== undefined;
+  // 只展示到筛选月份
+  let filteredData = data;
+  if (filters.year && filters.month) {
+    filteredData = data.filter(r => parseInt(r.month || r.BIZ_MONTH || '13') <= parseInt(filters.month));
+    if (!filteredData.length) return <Empty description="暂无该月份数据" />;
+  }
+
+  const months = filteredData.map((r) => `${r.month || r.BIZ_MONTH || ''}月`);
+  const cur = filteredData.map((r) => Number(r.current || r.visits || 0));
+  const prev = filteredData.map((r) => Number(r.previous || 0));
+  const yoyVals = filteredData.map((r) => (r.yoy != null ? r.yoy : null));
+  const hasCompare = filteredData[0] && filteredData[0].previous !== undefined;
 
   const series = hasCompare
     ? [
