@@ -8,9 +8,9 @@ import {
 
 function ChartCard({ title, children }) {
   return (
-    <div className="chart-card">
-      <h3 className="chart-title">{title}</h3>
-      {children}
+    <div className="card animate-in">
+      <div className="card-header"><span className="card-title">{title}</span></div>
+      <div className="card-body" style={{ padding: '8px 12px' }}>{children}</div>
     </div>
   );
 }
@@ -73,7 +73,7 @@ function DeptRankingChart({ filters }) {
     }],
   };
 
-  return <ReactECharts option={option} style={{ height: 300 }} notMerge />;
+  return <ReactECharts option={option} style={{ height: 280 }} notMerge />;
 }
 
 // ====== 月度收入趋势（支持收入类别联动） ======
