@@ -37,9 +37,9 @@ export default function VisitKpiCards({ filters }) {
 
   const KPI = [
     { key: 'total', title: '科室总人次', icon: <TeamOutlined />, color: '#2c5ea8', showYoY: true, prevKey: 'total', format: formatCount },
-    { key: 'outpatient', title: '门诊人次', icon: <HomeOutlined />, color: '#6366f1', showYoY: false, format: formatCount },
-    { key: 'emergency', title: '急诊人次', icon: <AlertOutlined />, color: '#f59e0b', showYoY: false, format: formatCount },
-    { key: 'inpatient', title: '住院人次', icon: <BankOutlined />, color: '#0ea5e9', showYoY: true, prevKey: 'total', format: formatCount },
+    { key: 'outpatient', title: '门诊人次', icon: <HomeOutlined />, color: '#6366f1', showYoY: true, prevKey: 'outpatient', format: formatCount },
+    { key: 'emergency', title: '急诊人次', icon: <AlertOutlined />, color: '#f59e0b', showYoY: true, prevKey: 'emergency', format: formatCount },
+    { key: 'inpatient', title: '住院人次', icon: <BankOutlined />, color: '#0ea5e9', showYoY: true, prevKey: 'inpatient', format: formatCount },
     { key: 'ops', title: '手术例数', icon: <ExperimentOutlined />, color: '#be123c', showYoY: true, prevKey: 'ops', format: formatCount },
     { key: 'discharges', title: '出院人次', icon: <LoginOutlined />, color: '#0891b2', showYoY: true, prevKey: 'discharges', format: formatCount },
     { key: 'avg_stay_days', title: '平均住院天数', icon: <CalendarOutlined />, color: '#7c3aed', showYoY: true, prevKey: 'avg_stay_days', format: (v) => v != null ? `${v} 天` : '-' },

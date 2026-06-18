@@ -317,7 +317,11 @@ app.get('/api/visit/summary', async (req, res) => {
     if (req.query.year) {
       const py = String(parseInt(req.query.year) - 1);
       const pv = buildVisitWhere({ ...req.query, year: py });
-      const [pr] = query(`SELECT COALESCE(SUM(NUM_DEPT),0) AS total FROM ads_dept_income ${pv.clause}`, pv.params);
+      const [pr] = query(`SELECT COALESCE(SUM(NUM_DEPT),0) AS total,
+        COALESCE(SUM(CASE WHEN OUTP_IN_TYPE='10' THEN NUM_DEPT ELSE 0 END),0) AS outpatient,
+        COALESCE(SUM(CASE WHEN OUTP_IN_TYPE='20' THEN NUM_DEPT ELSE 0 END),0) AS emergency,
+        COALESCE(SUM(CASE WHEN OUTP_IN_TYPE='40' THEN NUM_DEPT ELSE 0 END),0) AS inpatient
+      FROM ads_dept_income ${pv.clause}`, pv.params);
       const [prevOps] = query(`SELECT COALESCE(SUM(NUM_OPST),0) AS ops FROM ads_inx_operation WHERE BIZ_YEAR=?`, [py]);
       const [prevIp] = query(`SELECT
         COUNT(DISTINCT FPRN) AS discharges,
