@@ -244,6 +244,72 @@ function VisitZyStayChart({ filters }) {
   return <ReactECharts option={option} style={{ height: 260 }} notMerge />;
 }
 
+// ====== 月度人次环比变化率 ======
+function VisitMoMChart({ filters }) {
+  const [data, setData] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    setLoading(true);
+    // 不带 year 获取全部月度数据
+    fetchVisitTrend({ ...filters, year: undefined })
+      .then((d) => setData(d || []))
+      .catch(console.error)
+      .finally(() => setLoading(false));
+  }, [JSON.stringify(filters)]);
+
+  if (loading) return <Spin style={{ width: '100%', textAlign: 'center', padding: 30 }} />;
+  if (data.length < 2) return <Empty description="数据不足，无法计算环比" />;
+
+  // 计算环比变化率
+  const labels = [];
+  const momValues = [];
+  for (let i = 1; i < data.length; i++) {
+    const cur = Number(data[i].visits || 0);
+    const prev = Number(data[i - 1].visits || 0);
+    const label = `${data[i].BIZ_YEAR || ''}-${data[i].BIZ_MONTH || data[i].month || ''}`;
+    labels.push(label);
+    momValues.push(prev > 0 ? Number((((cur - prev) / prev) * 100).toFixed(2)) : null);
+  }
+
+  const option = {
+    tooltip: {
+      trigger: 'axis',
+      formatter: p => {
+        const v = p[0].value;
+        return `${p[0].axisValue}<br/>环比变化率：<b>${v != null ? (v > 0 ? '+' : '') + v + '%' : '—'}</b>`;
+      },
+    },
+    grid: { left: 8, right: 40, top: 10, bottom: 20, containLabel: true },
+    xAxis: {
+      type: 'category', data: labels,
+      axisLabel: { ...axisLabelStyle, fontSize: 9, rotate: 45 },
+    },
+    yAxis: {
+      type: 'value',
+      axisLabel: { ...axisLabelStyle, formatter: v => `${v}%` },
+      splitLine,
+    },
+    series: [{
+      type: 'bar',
+      data: momValues.map(v => ({
+        value: v,
+        itemStyle: {
+          color: v >= 0 ? '#22c55e' : '#ef4444',
+          borderRadius: [4, 4, 0, 0],
+        },
+      })),
+      barMaxWidth: 28,
+      label: {
+        show: true, position: 'top', fontSize: 9,
+        formatter: p => p.value != null ? `${p.value > 0 ? '+' : ''}${p.value}%` : '',
+      },
+    }],
+  };
+
+  return <ReactECharts option={option} style={{ height: 260 }} notMerge />;
+}
+
 export default function VisitChartSection({ filters }) {
   return (
     <div className="charts-grid animate-in stagger-2">
@@ -252,6 +318,7 @@ export default function VisitChartSection({ filters }) {
       <ChartCard title="🍩 门诊·急诊·住院人次构成"><VisitOEIChart filters={filters} /></ChartCard>
       <ChartCard title="🔪 手术级别分布"><VisitOpsLevelChart filters={filters} /></ChartCard>
       <ChartCard title="🏥 住院天数分布"><VisitZyStayChart filters={filters} /></ChartCard>
+      <ChartCard title="📉 月度人次环比变化率"><VisitMoMChart filters={filters} /></ChartCard>
     </div>
   );
 }
