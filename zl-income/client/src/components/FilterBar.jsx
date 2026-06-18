@@ -36,7 +36,6 @@ export default function FilterBar({ filters, onChange, onSearch }) {
   const handleReset = () => {
     onChange({
       year: undefined,
-      quarter: undefined,
       month: undefined,
       dept_code: undefined,
       catgroy: undefined,
@@ -52,13 +51,6 @@ export default function FilterBar({ filters, onChange, onSearch }) {
         onChange={(v) => updateFilter('year', v)}
         options={options.years.map((y) => ({ label: `${y}年`, value: y }))}
         style={{ width: 110 }} />
-
-      <div className="filter-divider" />
-
-      <Select allowClear placeholder="季度" value={filters.quarter}
-        onChange={(v) => updateFilter('quarter', v)}
-        options={options.quarters.map((q) => ({ label: `Q${q}`, value: q }))}
-        style={{ width: 100 }} />
 
       <Select allowClear placeholder="月份" value={filters.month}
         onChange={(v) => updateFilter('month', v)}
