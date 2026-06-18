@@ -281,10 +281,24 @@ app.get('/api/visit/summary', async (req, res) => {
         COALESCE(SUM(CASE WHEN OUTP_IN_TYPE='10' THEN NUM_DEPT ELSE 0 END), 0) AS outpatient,
         COALESCE(SUM(CASE WHEN OUTP_IN_TYPE='20' THEN NUM_DEPT ELSE 0 END), 0) AS emergency,
         COALESCE(SUM(CASE WHEN OUTP_IN_TYPE='40' THEN NUM_DEPT ELSE 0 END), 0) AS inpatient,
-        COALESCE(SUM(NUM_OPS), 0) AS ops
+        COALESCE(SUM(INCOME_DEPT), 0) AS total_income,
+        COALESCE(SUM(CASE WHEN OUTP_IN_TYPE='10' THEN INCOME_DEPT ELSE 0 END), 0) AS outpatient_income,
+        COALESCE(SUM(CASE WHEN OUTP_IN_TYPE='40' THEN INCOME_DEPT ELSE 0 END), 0) AS inpatient_income,
+        COALESCE(SUM(INCOME_DRUG), 0) AS drug_income,
+        COALESCE(SUM(INCOME_VALID), 0) AS valid_income
       FROM ads_dept_income ${clause}
     `, params);
     const data = rows[0];
+
+    // 手术例数从 ads_inx_operation 取数
+    let opsWhere = 'WHERE 1=1';
+    const opsParams = [];
+    if (req.query.year) { opsWhere += ' AND BIZ_YEAR = ?'; opsParams.push(req.query.year); }
+    if (req.query.quarter) { opsWhere += ' AND BIZ_QUARTER = ?'; opsParams.push(req.query.quarter); }
+    if (req.query.month) { opsWhere += ' AND BIZ_MONTH = ?'; opsParams.push(req.query.month); }
+    if (req.query.dept_code) { opsWhere += ' AND DEPT_ID = ?'; opsParams.push(req.query.dept_code); }
+    const [opsRows] = query(`SELECT COALESCE(SUM(NUM_OPST), 0) AS ops FROM ads_inx_operation ${opsWhere}`, opsParams);
+    data.ops = opsRows[0].ops;
 
     // 同比
     let prev = null;
@@ -292,7 +306,8 @@ app.get('/api/visit/summary', async (req, res) => {
       const py = String(parseInt(req.query.year) - 1);
       const pv = buildVisitWhere({ ...req.query, year: py });
       const [pr] = query(`SELECT COALESCE(SUM(NUM_DEPT),0) AS total FROM ads_dept_income ${pv.clause}`, pv.params);
-      prev = { total: pr[0].total };
+      const [prevOps] = query(`SELECT COALESCE(SUM(NUM_OPST),0) AS ops FROM ads_inx_operation WHERE BIZ_YEAR=?`, [py]);
+      prev = { total: pr[0].total, ops: prevOps[0].ops };
     }
     res.json({ success: true, data, previous: prev });
   } catch (err) {
