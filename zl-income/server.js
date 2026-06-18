@@ -317,20 +317,37 @@ app.get('/api/visit/summary', async (req, res) => {
     if (req.query.year) {
       const py = String(parseInt(req.query.year) - 1);
       const pv = buildVisitWhere({ ...req.query, year: py });
+
+      // 主表(含门诊/急诊/住院人次)
       const [pr] = query(`SELECT COALESCE(SUM(NUM_DEPT),0) AS total,
         COALESCE(SUM(CASE WHEN OUTP_IN_TYPE='10' THEN NUM_DEPT ELSE 0 END),0) AS outpatient,
         COALESCE(SUM(CASE WHEN OUTP_IN_TYPE='20' THEN NUM_DEPT ELSE 0 END),0) AS emergency,
         COALESCE(SUM(CASE WHEN OUTP_IN_TYPE='40' THEN NUM_DEPT ELSE 0 END),0) AS inpatient
       FROM ads_dept_income ${pv.clause}`, pv.params);
-      const [prevOps] = query(`SELECT COALESCE(SUM(NUM_OPST),0) AS ops FROM ads_inx_operation WHERE BIZ_YEAR=?`, [py]);
+
+      // 手术(带完整筛选)
+      let prevOpsWhere = 'WHERE BIZ_YEAR = ?';
+      const prevOpsParams = [py];
+      if (req.query.quarter) { prevOpsWhere += ' AND BIZ_QUARTER = ?'; prevOpsParams.push(req.query.quarter); }
+      if (req.query.month) { prevOpsWhere += ' AND BIZ_MONTH = ?'; prevOpsParams.push(req.query.month); }
+      if (req.query.dept_code) { prevOpsWhere += ' AND DEPT_ID = ?'; prevOpsParams.push(req.query.dept_code); }
+      const [prevOps] = query(`SELECT COALESCE(SUM(NUM_OPST),0) AS ops FROM ads_inx_operation ${prevOpsWhere}`, prevOpsParams);
+
+      // 住院明细(带完整筛选)
+      let prevIpWhere = 'WHERE BIZ_YEAR = ?';
+      const prevIpParams = [py];
+      if (req.query.quarter) { prevIpWhere += ' AND BIZ_QUARTER = ?'; prevIpParams.push(req.query.quarter); }
+      if (req.query.month) { prevIpWhere += ' AND BIZ_MONTH = ?'; prevIpParams.push(req.query.month); }
+      if (req.query.dept_code) { prevIpWhere += ' AND DEPT_CODE = ?'; prevIpParams.push(req.query.dept_code); }
       const [prevIp] = query(`SELECT
         COUNT(DISTINCT FPRN) AS discharges,
         COALESCE(ROUND(AVG(FDAYS),1), 0) AS avg_stay_days,
         COALESCE(SUM(CASE WHEN FZYSSLV IN ('3','4') THEN 1 ELSE 0 END), 0) AS level34_ops,
         COALESCE(SUM(CASE WHEN EVENT_WEEK IN ('周六','周日') THEN 1 ELSE 0 END), 0) AS weekend_inpatient,
         COALESCE(SUM(CASE WHEN FRYTJ='2' THEN 1 ELSE 0 END), 0) AS em_admission
-      FROM ads_inpatient_work_detail WHERE BIZ_YEAR=?`, [py]);
-      prev = { total: pr[0].total, ops: prevOps[0].ops, ...prevIp[0] };
+      FROM ads_inpatient_work_detail ${prevIpWhere}`, prevIpParams);
+
+      prev = { ...pr[0], ops: prevOps[0].ops, ...prevIp[0] };
     }
     res.json({ success: true, data, previous: prev });
   } catch (err) {
