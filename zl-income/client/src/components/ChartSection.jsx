@@ -258,6 +258,129 @@ function OEIChart({ filters }) {
   return <ReactECharts option={option} style={{ height: 260 }} notMerge />;
 }
 
+// ====== 月度收入同比增长率 ======
+function YoYGrowthChart({ filters }) {
+  const [data, setData] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    setLoading(true);
+    fetchIncomeTrend({ ...filters, field: 'INCOME_DEPT' })
+      .then(setData)
+      .catch(console.error)
+      .finally(() => setLoading(false));
+  }, [JSON.stringify(filters)]);
+
+  if (loading) return <Spin style={{ width: '100%', textAlign: 'center', padding: 30 }} />;
+  if (!data.length) return <Empty description="暂无数据" />;
+
+  // 仅在有同比数据时展示
+  const hasYoy = data.length > 0 && data[0].yoy !== undefined;
+  if (!hasYoy) return <Empty description="请选择具体年份查看同比增长率" />;
+
+  const months = data.map(r => `${r.month}月`);
+  const yoyValues = data.map(r => r.yoy);
+
+  const option = {
+    tooltip: {
+      trigger: 'axis',
+      formatter: p => `${p[0].axisValue}<br/>同比增长率：<b>${p[0].value != null ? (p[0].value > 0 ? '+' : '') + p[0].value + '%' : '—'}</b>`,
+    },
+    grid: { left: 8, right: 40, top: 10, bottom: 5, containLabel: true },
+    xAxis: {
+      type: 'category', data: months,
+      axisLabel: { ...textStyle },
+    },
+    yAxis: {
+      type: 'value',
+      axisLabel: { ...axisLabelStyle, formatter: v => `${v}%` },
+      splitLine: splitLineStyle,
+    },
+    series: [{
+      type: 'bar',
+      data: yoyValues.map(v => ({
+        value: v,
+        itemStyle: {
+          color: v >= 0 ? '#22c55e' : '#ef4444',
+          borderRadius: [4, 4, 0, 0],
+        },
+      })),
+      barMaxWidth: 32,
+      label: {
+        show: true,
+        position: 'top',
+        fontSize: 10,
+        formatter: p => p.value != null ? `${p.value > 0 ? '+' : ''}${p.value}%` : '',
+      },
+    }],
+    visualMap: false,
+  };
+
+  return <ReactECharts option={option} style={{ height: 260 }} notMerge />;
+}
+
+// ====== 收入类别金额排行 ======
+function CategoryBarChart({ filters }) {
+  const [data, setData] = useState([]);
+  const [total, setTotal] = useState(0);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    setLoading(true);
+    fetchIncomeComposition(filters)
+      .then(d => {
+        const items = d.items
+          .map(r => ({ name: r.category, value: Number(r.amount) / 10000 }))
+          .sort((a, b) => b.value - a.value);
+        setData(items);
+        setTotal(d.total / 10000);
+      })
+      .catch(console.error)
+      .finally(() => setLoading(false));
+  }, [JSON.stringify(filters)]);
+
+  if (loading) return <Spin style={{ width: '100%', textAlign: 'center', padding: 30 }} />;
+  if (!data.length) return <Empty description="暂无数据" />;
+
+  const colors = ['#2c5ea8', '#0ea5e9', '#7c3aed', '#f59e0b', '#059669', '#be123c', '#6366f1', '#d97706'];
+
+  const option = {
+    tooltip: {
+      trigger: 'axis',
+      axisPointer: { type: 'shadow' },
+      formatter: p => `${p[0].name}<br/>金额：<b>${p[0].value.toFixed(2)} 万元</b><br/>占比：<b>${((p[0].value / total) * 100).toFixed(1)}%</b>`,
+    },
+    grid: { left: 8, right: 70, top: 5, bottom: 5, containLabel: true },
+    xAxis: {
+      type: 'value',
+      axisLabel: { ...axisLabelStyle, formatter: v => `${v.toFixed(0)}万` },
+      splitLine: splitLineStyle,
+    },
+    yAxis: {
+      type: 'category',
+      data: data.map(d => d.name),
+      inverse: true,
+      axisLabel: { ...textStyle, fontSize: 10 },
+      axisLine: { show: false },
+      axisTick: { show: false },
+    },
+    series: [{
+      type: 'bar',
+      data: data.map((d, i) => ({
+        value: d.value,
+        itemStyle: { color: colors[i % colors.length], borderRadius: [0, 4, 4, 0] },
+      })),
+      barMaxWidth: 18,
+      label: {
+        show: true, position: 'right', color: '#5e6f82', fontSize: 10,
+        formatter: p => `${p.value.toFixed(1)}万`,
+      },
+    }],
+  };
+
+  return <ReactECharts option={option} style={{ height: 260 }} notMerge />;
+}
+
 // ====== 主图表区 ======
 export default function ChartSection({ filters }) {
   const [selectedCategory, setSelectedCategory] = useState(null);
@@ -282,6 +405,14 @@ export default function ChartSection({ filters }) {
 
       <ChartCard title="🏥 门诊·急诊·住院 构成">
         <OEIChart filters={filters} />
+      </ChartCard>
+
+      <ChartCard title="📉 月度收入同比增长率">
+        <YoYGrowthChart filters={filters} />
+      </ChartCard>
+
+      <ChartCard title="💰 各收入类别金额排行">
+        <CategoryBarChart filters={filters} />
       </ChartCard>
     </div>
   );
