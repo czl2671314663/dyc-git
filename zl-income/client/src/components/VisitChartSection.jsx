@@ -261,13 +261,21 @@ function VisitMoMChart({ filters }) {
   if (loading) return <Spin style={{ width: '100%', textAlign: 'center', padding: 30 }} />;
   if (data.length < 2) return <Empty description="数据不足，无法计算环比" />;
 
+  // 按年月排序，取最近12个月
+  const sorted = [...data].sort((a, b) => {
+    const ya = a.BIZ_YEAR || a.year || ''; const yb = b.BIZ_YEAR || b.year || '';
+    const ma = a.BIZ_MONTH || a.month || ''; const mb = b.BIZ_MONTH || b.month || '';
+    return ya !== yb ? ya - yb : ma - mb;
+  });
+  const recent = sorted.slice(-13); // 多取1个月用于计算第1个环比值
+
   // 计算环比变化率
   const labels = [];
   const momValues = [];
-  for (let i = 1; i < data.length; i++) {
-    const cur = Number(data[i].visits || 0);
-    const prev = Number(data[i - 1].visits || 0);
-    const label = `${data[i].BIZ_YEAR || ''}-${data[i].BIZ_MONTH || data[i].month || ''}`;
+  for (let i = 1; i < recent.length; i++) {
+    const cur = Number(recent[i].visits || 0);
+    const prev = Number(recent[i - 1].visits || 0);
+    const label = `${recent[i].BIZ_YEAR || ''}-${recent[i].BIZ_MONTH || recent[i].month || ''}`;
     labels.push(label);
     momValues.push(prev > 0 ? Number((((cur - prev) / prev) * 100).toFixed(2)) : null);
   }
