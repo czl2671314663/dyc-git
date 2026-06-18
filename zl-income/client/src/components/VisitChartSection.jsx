@@ -78,7 +78,8 @@ function VisitTrendChart({ filters }) {
 
   useEffect(() => {
     setLoading(true);
-    fetchVisitTrend({ ...filters })
+    // 趋势图不使用月份/季度筛选，只按年展示
+    fetchVisitTrend({ year: filters.year, dept_code: filters.dept_code })
       .then((d) => setData(d || []))
       .catch(console.error)
       .finally(() => setLoading(false));
@@ -251,8 +252,8 @@ function VisitMoMChart({ filters }) {
 
   useEffect(() => {
     setLoading(true);
-    // 不带 year 获取全部月度数据
-    fetchVisitTrend({ ...filters, year: undefined })
+    // 趋势图不使用月份/季度筛选，获取全部月度数据用于环比计算
+    fetchVisitTrend({ year: undefined, dept_code: filters.dept_code })
       .then((d) => setData(d || []))
       .catch(console.error)
       .finally(() => setLoading(false));
@@ -261,13 +262,24 @@ function VisitMoMChart({ filters }) {
   if (loading) return <Spin style={{ width: '100%', textAlign: 'center', padding: 30 }} />;
   if (data.length < 2) return <Empty description="数据不足，无法计算环比" />;
 
-  // 按年月排序，取最近12个月
+  // 按年月排序
   const sorted = [...data].sort((a, b) => {
     const ya = a.BIZ_YEAR || a.year || ''; const yb = b.BIZ_YEAR || b.year || '';
     const ma = a.BIZ_MONTH || a.month || ''; const mb = b.BIZ_MONTH || b.month || '';
     return ya !== yb ? ya - yb : ma - mb;
   });
-  const recent = sorted.slice(-13); // 多取1个月用于计算第1个环比值
+
+  // 以筛选框年月为终点，往前推12个月
+  const endKey = `${filters.year || ''}-${filters.month || ''}`;
+  let endIdx = sorted.length - 1;
+  if (filters.year && filters.month) {
+    for (let i = sorted.length - 1; i >= 0; i--) {
+      const k = `${sorted[i].BIZ_YEAR || sorted[i].year || ''}-${sorted[i].BIZ_MONTH || sorted[i].month || ''}`;
+      if (k === endKey) { endIdx = i; break; }
+    }
+  }
+  const startIdx = Math.max(0, endIdx - 12);
+  const recent = sorted.slice(startIdx, endIdx + 1);
 
   // 计算环比变化率
   const labels = [];

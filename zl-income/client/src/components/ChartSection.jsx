@@ -93,7 +93,7 @@ function IncomeTrendChart({ filters, category }) {
       '其他收入': 'INCOME_OTHER',
     };
     const field = categoryMap[category] || 'INCOME_DEPT';
-    fetchIncomeTrend({ ...filters, field })
+    fetchIncomeTrend({ year: filters.year, dept_code: filters.dept_code, catgroy: filters.catgroy, field })
       .then(setData)
       .catch(console.error)
       .finally(() => setLoading(false));
@@ -265,7 +265,7 @@ function YoYGrowthChart({ filters }) {
 
   useEffect(() => {
     setLoading(true);
-    fetchIncomeTrend({ ...filters, field: 'INCOME_DEPT' })
+    fetchIncomeTrend({ year: filters.year, dept_code: filters.dept_code, catgroy: filters.catgroy, field: 'INCOME_DEPT' })
       .then(setData)
       .catch(console.error)
       .finally(() => setLoading(false));
