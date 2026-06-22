@@ -318,14 +318,14 @@ function YoYGrowthChart({ filters }) {
           color: v >= 0 ? '#22c55e' : '#ef4444',
           borderRadius: [4, 4, 0, 0],
         },
+        label: {
+          show: true,
+          position: v >= 0 ? 'top' : 'bottom',
+          fontSize: 10,
+          formatter: () => v != null ? `${v > 0 ? '+' : ''}${v}%` : '',
+        },
       })),
       barMaxWidth: 32,
-      label: {
-        show: true,
-        position: 'top',
-        fontSize: 10,
-        formatter: p => p.value != null ? `${p.value > 0 ? '+' : ''}${p.value}%` : '',
-      },
     }],
     visualMap: false,
   };
