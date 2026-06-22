@@ -295,6 +295,12 @@ function YoYGrowthChart({ filters }) {
   const months = filteredData.map(r => `${r.month}月`);
   const yoyValues = filteredData.map(r => r.yoy);
 
+  // 计算 y 轴范围（比最大最小值多 10%）
+  const validYoy = yoyValues.filter(v => v != null);
+  const yMin = validYoy.length ? Math.min(...validYoy) : 0;
+  const yMax = validYoy.length ? Math.max(...validYoy) : 0;
+  const pad = Math.max(Math.abs(yMax - yMin) * 0.1, 2);
+
   const option = {
     tooltip: {
       trigger: 'axis',
@@ -307,6 +313,8 @@ function YoYGrowthChart({ filters }) {
     },
     yAxis: {
       type: 'value',
+      min: yMin - pad,
+      max: yMax + pad,
       axisLabel: { ...axisLabelStyle, formatter: v => `${v}%` },
       splitLine: splitLineStyle,
     },
@@ -321,7 +329,6 @@ function YoYGrowthChart({ filters }) {
         label: {
           show: true,
           position: v >= 0 ? 'top' : 'bottom',
-          offset: v >= 0 ? [0, 0] : [0, -8],
           fontSize: 10,
           formatter: () => v != null ? `${v > 0 ? '+' : ''}${v}%` : '',
         },
