@@ -129,7 +129,7 @@ function IncomeTrendChart({ filters, category }) {
         : p => `${p[0].axisValue}<br/>收入：<b>${p[0].value.toFixed(2)} 万元</b>`,
     },
     legend: hasYoy ? { data: ['当年', '上年', '同比'], bottom: 0, itemWidth: 12, itemHeight: 8, textStyle } : undefined,
-    grid: { left: 8, right: hasYoy ? 50 : 8, top: 10, bottom: hasYoy ? 30 : 5 },
+    grid: { left: 8, right: hasYoy ? 50 : 8, top: 10, bottom: hasYoy ? 40 : 5 },
     xAxis: { type: 'category', data: months, axisLabel: { ...textStyle }, axisTick: { alignWithLabel: true } },
     yAxis: [
       { type: 'value', axisLabel: { ...axisLabelStyle, formatter: v => `${v.toFixed(0)}万` }, splitLine },
