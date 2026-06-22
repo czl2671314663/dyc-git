@@ -480,7 +480,7 @@ app.get('/api/visit/dept-detail', async (req, res) => {
         COALESCE(SUM(NUM_DEPT), 0) AS total_visits,
         COALESCE(SUM(CASE WHEN OUTP_IN_TYPE='10' THEN NUM_DEPT ELSE 0 END), 0) AS outpatient,
         COALESCE(SUM(CASE WHEN OUTP_IN_TYPE='20' THEN NUM_DEPT ELSE 0 END), 0) AS emergency,
-        COALESCE(SUM(NUM_OPS), 0) AS ops
+        COALESCE(SUM(CASE WHEN CATGROY='ZY' THEN NUM_DEPT ELSE 0 END), 0) AS inpatient_visits
       FROM ads_dept_income ${clause}
       GROUP BY DEPT_CODE, DEPT_NAME
       ORDER BY total_visits DESC LIMIT ? OFFSET ?

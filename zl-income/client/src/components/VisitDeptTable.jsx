@@ -17,7 +17,7 @@ const COLUMNS = [
   { title: '急诊', dataIndex: 'emergency', key: 'emergency', width: 80, render: v => fmt(v) },
   { title: '专家号', dataIndex: 'expert', key: 'expert', width: 80, render: v => fmt(v) },
   { title: '特需号', dataIndex: 'vip', key: 'vip', width: 70, render: v => fmt(v) },
-  { title: '手术', dataIndex: 'ops', key: 'ops', width: 70, render: v => fmt(v) },
+  { title: '住院人次', dataIndex: 'inpatient_visits', key: 'inpatient_visits', width: 90, render: v => fmt(v) },
 ];
 
 export default function VisitDeptTable({ filters }) {
@@ -49,9 +49,9 @@ export default function VisitDeptTable({ filters }) {
       const sheetData = rows.map((r, i) => [
         i + 1, r.DEPT_CODE, r.DEPT_NAME,
         Number(r.total_visits || 0), Number(r.outpatient || 0), Number(r.emergency || 0),
-        Number(r.expert || 0), Number(r.vip || 0), Number(r.ops || 0),
+        Number(r.expert || 0), Number(r.vip || 0), Number(r.inpatient_visits || 0),
       ]);
-      const ws = XLSX.utils.aoa_to_sheet([['排名','科室编码','科室名称','总人次','门诊','急诊','专家号','特需号','手术'], ...sheetData]);
+      const ws = XLSX.utils.aoa_to_sheet([['排名','科室编码','科室名称','总人次','门诊','急诊','专家号','特需号','住院人次'], ...sheetData]);
       ws['!cols'] = [6,12,18,10,10,10,10,10,10];
       const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, '科室人次明细');
