@@ -167,7 +167,7 @@ function VisitOEIChart({ filters }) {
     tooltip: { trigger: 'item', formatter: (p) => `${p.name}<br/>人次：<b>${p.value.toLocaleString()}</b>（${p.percent}%）` },
     legend: { bottom: 0, itemWidth: 10, itemHeight: 8, textStyle: { fontSize: 10, color: '#5e6f82' } },
     series: [{
-      type: 'pie', radius: ['55%', '78%'], center: ['50%', '45%'],
+      type: 'pie', radius: ['45%', '65%'], center: ['50%', '45%'],
       avoidLabelOverlap: false, itemStyle: { borderRadius: 4, borderColor: '#fff', borderWidth: 2 },
       color: colors, label: { show: true, position: 'outside', fontSize: 10, color: '#5e6f82', formatter: (p) => `${p.name}\n${p.percent}%` },
       data,
@@ -238,7 +238,7 @@ function VisitZyStayChart({ filters }) {
     tooltip: { trigger: 'item', formatter: (p) => `${p.name}<br/>人次：<b>${p.value.toLocaleString()}</b>（${p.percent}%）` },
     legend: { bottom: 0, itemWidth: 10, itemHeight: 8, textStyle: { fontSize: 10, color: '#5e6f82' } },
     series: [{
-      type: 'pie', radius: ['55%', '78%'], center: ['50%', '45%'],
+      type: 'pie', radius: ['45%', '65%'], center: ['50%', '45%'],
       avoidLabelOverlap: false, itemStyle: { borderRadius: 4, borderColor: '#fff', borderWidth: 2 },
       color: colors, label: { show: true, position: 'outside', fontSize: 10, color: '#5e6f82', formatter: (p) => `${p.name}\n${p.percent}%` },
       data,

@@ -183,7 +183,7 @@ function IncomeCompositionChart({ filters, selectedCategory, onCategoryClick }) 
     legend: { bottom: 0, itemWidth: 10, itemHeight: 8, textStyle: { fontSize: 10, color: '#5e6f82' } },
     series: [{
       type: 'pie',
-      radius: ['55%', '78%'],
+      radius: ['45%', '65%'],
       center: ['50%', '45%'],
       avoidLabelOverlap: false,
       itemStyle: {
@@ -248,7 +248,7 @@ function OEIChart({ filters }) {
     legend: { bottom: 0, itemWidth: 10, itemHeight: 8, textStyle: { fontSize: 10, color: '#5e6f82' } },
     series: [{
       type: 'pie',
-      radius: ['55%', '78%'],
+      radius: ['45%', '65%'],
       center: ['50%', '45%'],
       avoidLabelOverlap: false,
       itemStyle: { borderRadius: 4, borderColor: '#fff', borderWidth: 2 },
