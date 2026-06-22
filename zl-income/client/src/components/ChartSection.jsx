@@ -295,13 +295,12 @@ function YoYGrowthChart({ filters }) {
   const months = filteredData.map(r => `${r.month}月`);
   const yoyValues = filteredData.map(r => r.yoy);
 
-  // 扩大 y 轴范围，给标签留空间
+  // y 轴范围：向下取整到最近10%，扩展1个10%步长，给标签留空间
   const vals = yoyValues.filter(v => v != null);
   const dataMin = vals.length ? Math.min(...vals) : 0;
   const dataMax = vals.length ? Math.max(...vals) : 0;
-  const range = Math.max(Math.abs(dataMax - dataMin), 10);
-  const yMin = dataMin - range * 0.25;
-  const yMax = dataMax + range * 0.25;
+  const yMin = Math.floor(dataMin / 10) * 10 - 10;
+  const yMax = Math.ceil(dataMax / 10) * 10 + 10;
 
   const option = {
     tooltip: {
