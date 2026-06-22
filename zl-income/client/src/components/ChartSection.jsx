@@ -272,7 +272,7 @@ function YoYGrowthChart({ filters }) {
 
   useEffect(() => {
     setLoading(true);
-    fetchIncomeTrend({ year: filters.year, dept_code: filters.dept_code, catgroy: filters.catgroy, field: 'INCOME_DEPT' })
+    fetchIncomeTrend({ ...filters, field: 'INCOME_DEPT' })
       .then(setData)
       .catch(console.error)
       .finally(() => setLoading(false));
@@ -281,25 +281,12 @@ function YoYGrowthChart({ filters }) {
   if (loading) return <Spin style={{ width: '100%', textAlign: 'center', padding: 30 }} />;
   if (!data.length) return <Empty description="暂无数据" />;
 
-  // 只展示到筛选月份
-  let filteredData = data;
-  if (filters.year && filters.month) {
-    filteredData = data.filter(r => parseInt(r.month || r.BIZ_MONTH || '13') <= parseInt(filters.month));
-    if (!filteredData.length) return <Empty description="暂无该月份数据" />;
-  }
-
   // 仅在有同比数据时展示
-  const hasYoy = filteredData.length > 0 && filteredData[0].yoy !== undefined;
+  const hasYoy = data.length > 0 && data[0].yoy !== undefined;
   if (!hasYoy) return <Empty description="请选择具体年份查看同比增长率" />;
 
-  const months = filteredData.map(r => `${r.month}月`);
-  const yoyValues = filteredData.map(r => r.yoy);
-
-  // 计算 y 轴范围（比最大最小值多 10%）
-  const validYoy = yoyValues.filter(v => v != null);
-  const yMin = validYoy.length ? Math.min(...validYoy) : 0;
-  const yMax = validYoy.length ? Math.max(...validYoy) : 0;
-  const pad = Math.max(Math.abs(yMax - yMin) * 0.1, 2);
+  const months = data.map(r => `${r.month}月`);
+  const yoyValues = data.map(r => r.yoy);
 
   const option = {
     tooltip: {
@@ -313,8 +300,6 @@ function YoYGrowthChart({ filters }) {
     },
     yAxis: {
       type: 'value',
-      min: yMin - pad,
-      max: yMax + pad,
       axisLabel: { ...axisLabelStyle, formatter: v => `${v}%` },
       splitLine: splitLineStyle,
     },
@@ -324,16 +309,16 @@ function YoYGrowthChart({ filters }) {
         value: v,
         itemStyle: {
           color: v >= 0 ? '#22c55e' : '#ef4444',
-          borderRadius: v >= 0 ? [4, 4, 0, 0] : [0, 0, 4, 4],
-        },
-        label: {
-          show: true,
-          position: v >= 0 ? 'top' : 'bottom',
-          fontSize: 10,
-          formatter: () => v != null ? `${v > 0 ? '+' : ''}${v}%` : '',
+          borderRadius: [4, 4, 0, 0],
         },
       })),
       barMaxWidth: 32,
+      label: {
+        show: true,
+        position: 'top',
+        fontSize: 10,
+        formatter: p => p.value != null ? `${p.value > 0 ? '+' : ''}${p.value}%` : '',
+      },
     }],
     visualMap: false,
   };
