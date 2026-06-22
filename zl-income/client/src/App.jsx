@@ -64,16 +64,18 @@ export default function App() {
         </header>
 
         <main className="app-main">
-          <Tabs
-            activeKey={activeTab}
-            onChange={setActiveTab}
-            style={{ marginBottom: -24 }}
-            items={[
-              { key: 'income', label: '💰 科室收入看板' },
-              { key: 'visit', label: '👥 科室人次看板' },
-            ]}
-          />
-          <FilterBar filters={filters} onChange={handleFilterChange} onSearch={handleSearch} />
+          <div className="sticky-toolbar">
+            <Tabs
+              activeKey={activeTab}
+              onChange={setActiveTab}
+              style={{ marginBottom: -24 }}
+              items={[
+                { key: 'income', label: '💰 科室收入看板' },
+                { key: 'visit', label: '👥 科室人次看板' },
+              ]}
+            />
+            <FilterBar filters={filters} onChange={handleFilterChange} onSearch={handleSearch} />
+          </div>
 
           {activeTab === 'income' ? (
             <>
