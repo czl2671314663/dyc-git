@@ -316,7 +316,7 @@ function YoYGrowthChart({ filters }) {
         value: v,
         itemStyle: {
           color: v >= 0 ? '#22c55e' : '#ef4444',
-          borderRadius: [4, 4, 0, 0],
+          borderRadius: v >= 0 ? [4, 4, 0, 0] : [0, 0, 4, 4],
         },
         label: {
           show: true,
