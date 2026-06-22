@@ -299,6 +299,13 @@ function VisitMoMChart({ filters }) {
     momValues.push(prev > 0 ? Number((((cur - prev) / prev) * 100).toFixed(2)) : null);
   }
 
+  // y 轴范围：向下取整到最近10%，扩展1个10%步长
+  const vals = momValues.filter(v => v != null);
+  const dataMin = vals.length ? Math.min(...vals) : 0;
+  const dataMax = vals.length ? Math.max(...vals) : 0;
+  const yMin = Math.floor(dataMin / 10) * 10 - 10;
+  const yMax = Math.ceil(dataMax / 10) * 10 + 10;
+
   const option = {
     tooltip: {
       trigger: 'axis',
@@ -307,13 +314,15 @@ function VisitMoMChart({ filters }) {
         return `${p[0].axisValue}<br/>环比变化率：<b>${v != null ? (v > 0 ? '+' : '') + v + '%' : '—'}</b>`;
       },
     },
-    grid: { left: 8, right: 40, top: 10, bottom: 20, containLabel: true },
+    grid: { left: 8, right: 40, top: 10, bottom: 5, containLabel: true },
     xAxis: {
       type: 'category', data: labels,
-      axisLabel: { ...axisLabelStyle, fontSize: 9, rotate: 45 },
+      axisLabel: { ...axisLabelStyle, fontSize: 10 },
     },
     yAxis: {
       type: 'value',
+      min: yMin,
+      max: yMax,
       axisLabel: { ...axisLabelStyle, formatter: v => `${v}%` },
       splitLine,
     },
@@ -323,14 +332,16 @@ function VisitMoMChart({ filters }) {
         value: v,
         itemStyle: {
           color: v >= 0 ? '#22c55e' : '#ef4444',
-          borderRadius: [4, 4, 0, 0],
+          borderRadius: v >= 0 ? [4, 4, 0, 0] : [0, 0, 4, 4],
+        },
+        label: {
+          show: true,
+          position: v >= 0 ? 'top' : 'bottom',
+          fontSize: 10,
+          formatter: () => v != null ? `${v > 0 ? '+' : ''}${v}%` : '',
         },
       })),
-      barMaxWidth: 28,
-      label: {
-        show: true, position: 'top', fontSize: 9,
-        formatter: p => p.value != null ? `${p.value > 0 ? '+' : ''}${p.value}%` : '',
-      },
+      barMaxWidth: 32,
     }],
   };
 
