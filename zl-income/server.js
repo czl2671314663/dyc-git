@@ -79,8 +79,22 @@ app.get('/api/income/summary', async (req, res) => {
       const prev = buildWhere({ BIZ_YEAR: prevYear, BIZ_QUARTER: quarter, BIZ_MONTH: month, DEPT_CODE: dept_code, CATGROY: catgroy });
       const prevWhere = "WHERE TIME_TYPE='1' AND DEPT_TYPE='1'" + prev.clause;
       const [prevRows] = query(`
-        SELECT COALESCE(SUM(INCOME_DEPT), 0) AS total_income,
-          COALESCE(SUM(NUM_DEPT), 0) AS visit_count
+        SELECT
+          COALESCE(SUM(INCOME_DEPT), 0)       AS total_income,
+          COALESCE(SUM(INCOME_VALID), 0)      AS valid_income,
+          COALESCE(SUM(INCOME_DRUG), 0)       AS drug_income,
+          COALESCE(SUM(INCOME_MATERIAL), 0)   AS material_income,
+          COALESCE(SUM(INCOME_EXAM_TEST), 0)  AS exam_test_income,
+          COALESCE(SUM(INCOME_SERVICE), 0)    AS service_income,
+          COALESCE(SUM(INCOME_REG), 0)        AS reg_income,
+          COALESCE(SUM(INCOME_OTHER), 0)      AS other_income,
+          COALESCE(SUM(INCOME_BED), 0)        AS bed_income,
+          COALESCE(SUM(INCOME_NURSE), 0)      AS nurse_income,
+          COALESCE(SUM(NUM_DEPT), 0)          AS visit_count,
+          COALESCE(SUM(NUM_OPS), 0)           AS ops_count,
+          COALESCE(SUM(CASE WHEN OUTP_IN_TYPE='10' THEN INCOME_DEPT ELSE 0 END), 0) AS outpatient_income,
+          COALESCE(SUM(CASE WHEN OUTP_IN_TYPE='20' THEN INCOME_DEPT ELSE 0 END), 0) AS emergency_income,
+          COALESCE(SUM(CASE WHEN OUTP_IN_TYPE='40' THEN INCOME_DEPT ELSE 0 END), 0) AS inpatient_income
         FROM ads_dept_income ${prevWhere}
       `, prev.params);
       previous = prevRows[0];
