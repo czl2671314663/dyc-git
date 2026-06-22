@@ -300,7 +300,7 @@ function YoYGrowthChart({ filters }) {
       trigger: 'axis',
       formatter: p => `${p[0].axisValue}<br/>同比增长率：<b>${p[0].value != null ? (p[0].value > 0 ? '+' : '') + p[0].value + '%' : '—'}</b>`,
     },
-    grid: { left: 8, right: 40, top: 10, bottom: 20, containLabel: true },
+    grid: { left: 8, right: 40, top: 10, bottom: 5, containLabel: true },
     xAxis: {
       type: 'category', data: months,
       axisLabel: { ...textStyle },
@@ -331,7 +331,7 @@ function YoYGrowthChart({ filters }) {
     visualMap: false,
   };
 
-  return <ReactECharts option={option} style={{ height: 210 }} notMerge />;
+  return <ReactECharts option={option} style={{ height: 260 }} notMerge />;
 }
 
 // ====== 收入类别金额排行 ======
