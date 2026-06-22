@@ -588,6 +588,11 @@ app.get('/api/dept-tree', async (req, res) => {
     const [rows] = query(`
       SELECT DEPT_CODE, DEPT_NAME, DEPT_LEVEL, PCODE, SORTED
       FROM standard_dept WHERE STOPPED='N'
+        AND DEPT_CODE NOT LIKE '301%'
+        AND DEPT_CODE NOT LIKE '401%'
+        AND DEPT_CODE NOT LIKE '501%'
+        AND DEPT_CODE NOT LIKE '502%'
+        AND DEPT_CODE NOT LIKE '601%'
       ORDER BY DEPT_LEVEL, SORTED
     `);
     // 构建树：先按PCODE分组
