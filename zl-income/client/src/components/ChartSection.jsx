@@ -139,7 +139,6 @@ function IncomeTrendChart({ filters, category }) {
       {
         name: '当年', type: 'bar', data: currentData,
         itemStyle: { color: '#2c5ea8', borderRadius: [4, 4, 0, 0] }, barMaxWidth: 28,
-        label: { show: true, position: 'top', fontSize: 9, color: '#2c5ea8', formatter: p => p.value > 10 ? p.value.toFixed(0) : '' },
       },
       hasYoy ? {
         name: '上年', type: 'bar', data: previousData,
