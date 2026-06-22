@@ -36,8 +36,14 @@ export async function fetchDeptDetail(params) {
 }
 
 // 科室列表（扁平）
-export async function fetchDeptTree() {
+export async function fetchDeptList() {
   const { data } = await api.get('/dept-list');
+  return data.data;
+}
+
+// 科室树
+export async function fetchDeptTree() {
+  const { data } = await api.get('/dept-tree');
   return data.data;
 }
 

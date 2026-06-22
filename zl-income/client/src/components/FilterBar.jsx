@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Select, Button, Space } from 'antd';
+import { Select, TreeSelect, Button, Space } from 'antd';
 import { ReloadOutlined, SearchOutlined } from '@ant-design/icons';
 import { fetchFilterOptions, fetchDeptTree } from '../api';
 
@@ -10,27 +10,21 @@ export default function FilterBar({ filters, onChange, onSearch }) {
     quarters: ['1', '2', '3', '4'],
     months: Array.from({ length: 12 }, (_, i) => String(i + 1).padStart(2, '0')),
   });
-  const [deptList, setDeptList] = useState([]);
+  const [deptTree, setDeptTree] = useState([]);
 
   useEffect(() => {
     fetchFilterOptions()
       .then(setOptions)
       .catch(console.error);
-    // 新 API 返回扁平的科室列表 [{DEPT_CODE, DEPT_NAME}, ...]
     fetchDeptTree()
-      .then(data => {
-        if (Array.isArray(data)) {
-          setDeptList(data.map(d => ({
-            value: d.DEPT_CODE || d.code,
-            label: d.DEPT_NAME || d.name,
-          })));
-        }
-      })
+      .then(data => setDeptTree(data || []))
       .catch(console.error);
   }, []);
 
   const updateFilter = (key, value) => {
-    onChange({ ...filters, [key]: value });
+    // 科室多选: 数组转逗号分隔字符串
+    const val = key === 'dept_code' && Array.isArray(value) ? value.join(',') : value;
+    onChange({ ...filters, [key]: val || undefined });
   };
 
   const handleReset = () => {
@@ -41,6 +35,11 @@ export default function FilterBar({ filters, onChange, onSearch }) {
       catgroy: undefined,
     });
   };
+
+  // 将逗号分隔的科室代码转为数组供TreeSelect显示
+  const deptValue = filters.dept_code
+    ? filters.dept_code.split(',').filter(Boolean)
+    : undefined;
 
   return (
     <div className="filter-bar animate-in stagger-1">
@@ -59,19 +58,22 @@ export default function FilterBar({ filters, onChange, onSearch }) {
 
       <div className="filter-divider" />
 
-      <Select
+      <TreeSelect
         allowClear
         showSearch
-        placeholder="选择科室"
-        value={filters.dept_code}
+        multiple
+        placeholder="选择科室（支持多选父节点）"
+        value={deptValue}
         onChange={(v) => updateFilter('dept_code', v)}
-        options={deptList}
-        style={{ minWidth: 220 }}
+        treeData={deptTree}
+        style={{ minWidth: 260, maxWidth: 400 }}
         maxTagCount={1}
-        filterOption={(input, option) =>
-          (option?.label || '').toLowerCase().includes(input.toLowerCase())
+        filterTreeNode={(input, node) =>
+          (node.title || '').toLowerCase().includes(input.toLowerCase())
         }
-        popupMatchSelectWidth={300}
+        treeCheckable
+        showCheckedStrategy={TreeSelect.SHOW_PARENT}
+        popupMatchSelectWidth={400}
       />
 
       <div className="filter-divider" />

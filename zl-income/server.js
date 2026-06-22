@@ -8,7 +8,8 @@ app.use(express.json());
 
 // ====== 工具函数 ======
 
-/** 构建 WHERE 条件，传入 { BIZ_YEAR?, BIZ_QUARTER?, BIZ_MONTH?, DEPT_CODE?, CATGROY? } */
+/** 构建 WHERE 条件，传入 { BIZ_YEAR?, BIZ_QUARTER?, BIZ_MONTH?, DEPT_CODE?, CATGROY? }
+ *  DEPT_CODE 支持逗号分隔多选，自动展开为叶子科室 */
 function buildWhere(filters) {
   let clause = '';
   const params = [];
@@ -16,13 +17,25 @@ function buildWhere(filters) {
     ['BIZ_YEAR', filters.BIZ_YEAR],
     ['BIZ_QUARTER', filters.BIZ_QUARTER],
     ['BIZ_MONTH', filters.BIZ_MONTH],
-    ['DEPT_CODE', filters.DEPT_CODE],
     ['CATGROY', filters.CATGROY],
   ];
   for (const [name, val] of fields) {
     if (val !== undefined && val !== null && val !== '') {
       clause += ` AND ${name} = ?`;
       params.push(val);
+    }
+  }
+  // 科室多选支持
+  if (filters.DEPT_CODE) {
+    const codes = filters.DEPT_CODE.split(',').filter(Boolean);
+    const leaves = expandDeptCodes(codes);
+    if (leaves.length) {
+      const ph = leaves.map(() => '?').join(',');
+      clause += ` AND DEPT_CODE IN (${ph})`;
+      params.push(...leaves);
+    } else {
+      clause += ' AND DEPT_CODE = ?';
+      params.push(filters.DEPT_CODE);
     }
   }
   return { clause, params };
@@ -267,8 +280,20 @@ function buildVisitWhere(query) {
   if (year) { clause += ' AND BIZ_YEAR = ?'; params.push(year); }
   if (quarter) { clause += ' AND BIZ_QUARTER = ?'; params.push(quarter); }
   if (month) { clause += ' AND BIZ_MONTH = ?'; params.push(month); }
-  if (dept_code) { clause += ' AND DEPT_CODE = ?'; params.push(dept_code); }
   if (catgroy) { clause += ' AND CATGROY = ?'; params.push(catgroy); }
+  // 科室多选支持
+  if (dept_code) {
+    const codes = dept_code.split(',').filter(Boolean);
+    const leaves = expandDeptCodes(codes);
+    if (leaves.length) {
+      const ph = leaves.map(() => '?').join(',');
+      clause += ` AND DEPT_CODE IN (${ph})`;
+      params.push(...leaves);
+    } else {
+      clause += ' AND DEPT_CODE = ?';
+      params.push(dept_code);
+    }
+  }
   return { clause, params };
 }
 
@@ -542,6 +567,49 @@ app.get('/api/latest-date', async (req, res) => {
     res.status(500).json({ success: false, message: err.message });
   }
 });
+
+/** 科室树（供下拉树） */
+app.get('/api/dept-tree', async (req, res) => {
+  try {
+    const [rows] = query(`
+      SELECT DEPT_CODE, DEPT_NAME, DEPT_LEVEL, PCODE, SORTED
+      FROM standard_dept WHERE STOPPED='N'
+      ORDER BY DEPT_LEVEL, SORTED
+    `);
+    // 构建树：先按PCODE分组
+    const childrenMap = {};
+    rows.forEach(r => {
+      const p = r.PCODE || '0';
+      if (!childrenMap[p]) childrenMap[p] = [];
+      childrenMap[p].push(r);
+    });
+    function buildTree(pcode) {
+      const list = childrenMap[pcode] || [];
+      return list.map(r => ({
+        value: r.DEPT_CODE,
+        title: r.DEPT_NAME,
+        children: buildTree(r.DEPT_CODE) || undefined,
+      })).map(n => (n.children && n.children.length ? n : { value: n.value, title: n.title }));
+    }
+    const tree = buildTree('0');
+    res.json({ success: true, data: tree });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// 将选中的科室代码展开为叶子科室列表（支持父子节点混合）
+function expandDeptCodes(codes) {
+  if (!codes || !codes.length) return [];
+  const clauses = codes.map(() => '(DEPT_CODE = ? OR DEPT_CODE LIKE ?)').join(' OR ');
+  const params = [];
+  codes.forEach(c => { params.push(c, c + '%'); });
+  const [rows] = query(`
+    SELECT DISTINCT DEPT_CODE FROM standard_dept
+    WHERE STOPPED='N' AND DEPT_LEVEL >= '3' AND (${clauses})
+  `, params);
+  return rows.map(r => r.DEPT_CODE);
+}
 
 /** 科室列表（扁平，供下拉框） */
 app.get('/api/dept-list', async (req, res) => {
